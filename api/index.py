@@ -1,13 +1,37 @@
-# api/index.py (rename your app.py here)
-from flask import Flask, render_template, request, send_file
+from flask import Flask, request, send_file, make_response
 import yt_dlp
 import os
 import uuid
 import tempfile
+import traceback
 
 app = Flask(__name__)
 
-DOWNLOAD_DIR = tempfile.gettempdir()  # Use temp dir for serverless []
+HTML = """
+<!doctype html>
+<html>
+<head>
+    <title>TubeSnap</title>
+    <style>
+        body { margin:0; height:100vh; display:flex; align-items:center; justify-content:center; font-family:system-ui; background:#0f172a; color:#e5e7eb; }
+        .box { padding:2rem; border-radius:0.75rem; background:#020617; box-shadow:0 20px 40px rgba(0,0,0,0.6); min-width:320px; }
+        h1 { margin:0 0 1rem; font-size:1.25rem; text-align:center; }
+        form { display:flex; gap:0.5rem; }
+        input[type="text"] { flex:1; padding:0.6rem 0.8rem; border-radius:0.5rem; border:1px solid #1f2937; background:#020617; color:#e5e7eb; }
+        button { padding:0.6rem 1rem; border-radius:0.5rem; border:none; background:#2563eb; color:#e5e7eb; cursor:pointer; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h1>TubeSnap</h1>
+        <form method="post">
+            <input type="text" name="url" placeholder="Paste YouTube URL" required>
+            <button type="submit">Download</button>
+        </form>
+    </div>
+</body>
+</html>
+"""
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -16,21 +40,33 @@ def index():
         if not url:
             return "Invalid URL", 400
 
-        temp_id = str(uuid.uuid4())
-        output_template = os.path.join(DOWNLOAD_DIR, f"{temp_id}.%(ext)s")
+        try:
+            temp_dir = tempfile.mkdtemp()
+            temp_id = str(uuid.uuid4())
+            output_template = os.path.join(temp_dir, f"{temp_id}.%(ext)s")
 
-        ydl_opts = {
-            "outtmpl": output_template,
-            "format": "bestvideo+bestaudio/best",
-            "merge_output_format": "mp4",
-        }
+            ydl_opts = {
+                "outtmpl": output_template,
+                "format": "best[ext=mp4]/best",  # Native MP4, no FFmpeg needed
+                "noplaylist": True,
+            }
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            ext = info.get("ext", "mp4")
-            filename = f"{temp_id}.{ext}"
-            filepath = os.path.join(DOWNLOAD_DIR, filename)
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                files = ydl.prepare_filename(info)
+                filepath = files.rsplit(".", 1)[0] + ".mp4"
+                if not os.path.exists(filepath):
+                    filepath = files.rsplit(".", 1)[0] + ".webm"
 
-        return send_file(filepath, as_attachment=True, download_name=filename)
+            return send_file(filepath, as_attachment=True, download_name="video.mp4")
+        except Exception as e:
+            return f"Error: {str(e)}", 500
+        finally:
+            if 'temp_dir' in locals():
+                import shutil
+                shutil.rmtree(temp_dir, ignore_errors=True)
 
-    return render_template("index.html")  # templates/ still works []
+    return HTML
+
+if __name__ == "__main__":
+    app.run()
