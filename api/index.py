@@ -1,8 +1,9 @@
-from flask import Flask, request, send_file, make_response
+from flask import Flask, request, send_file
 import yt_dlp
 import os
 import uuid
 import tempfile
+import shutil
 import traceback
 
 app = Flask(__name__)
@@ -19,6 +20,7 @@ HTML = """
         form { display:flex; gap:0.5rem; }
         input[type="text"] { flex:1; padding:0.6rem 0.8rem; border-radius:0.5rem; border:1px solid #1f2937; background:#020617; color:#e5e7eb; }
         button { padding:0.6rem 1rem; border-radius:0.5rem; border:none; background:#2563eb; color:#e5e7eb; cursor:pointer; }
+        button:hover { background:#1d4ed8; }
     </style>
 </head>
 <body>
@@ -47,8 +49,12 @@ def index():
 
             ydl_opts = {
                 "outtmpl": output_template,
-                "format": "best[ext=mp4]/best",  # Native MP4, no FFmpeg needed
+                "format": "best[ext=mp4]/best",
                 "noplaylist": True,
+                "extractor_args": {"youtube": {"skip": ["hls", "dash"]}},
+                "http_headers": {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                }
             }
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -58,12 +64,14 @@ def index():
                 if not os.path.exists(filepath):
                     filepath = files.rsplit(".", 1)[0] + ".webm"
 
-            return send_file(filepath, as_attachment=True, download_name="video.mp4")
+            if os.path.exists(filepath):
+                return send_file(filepath, as_attachment=True, download_name="video.mp4")
+            return "Download failed", 500
+
         except Exception as e:
             return f"Error: {str(e)}", 500
         finally:
             if 'temp_dir' in locals():
-                import shutil
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
     return HTML
