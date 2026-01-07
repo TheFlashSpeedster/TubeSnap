@@ -30,7 +30,8 @@ def index():
             filename = f"{temp_id}.{ext}"
             filepath = os.path.join(DOWNLOAD_DIR, filename)
 
-        return send_file(filepath, as_attachment=True)
+        # return send_file(filepath, as_attachment=True)
+        return send_file(filepath, as_attachment=True, download_name=os.path.basename(filepath))
 
     return render_template("index.html")
 
