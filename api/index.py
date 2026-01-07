@@ -1,26 +1,27 @@
-from flask import Flask, render_template, request, send_file, redirect, url_for
+# api/index.py (rename your app.py here)
+from flask import Flask, render_template, request, send_file
 import yt_dlp
 import os
 import uuid
+import tempfile
 
 app = Flask(__name__)
 
-DOWNLOAD_DIR = "downloads"
-os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+DOWNLOAD_DIR = tempfile.gettempdir()  # Use temp dir for serverless []
 
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
         url = request.form.get("url", "").strip()
         if not url:
-            return redirect(url_for("index"))
+            return "Invalid URL", 400
 
         temp_id = str(uuid.uuid4())
         output_template = os.path.join(DOWNLOAD_DIR, f"{temp_id}.%(ext)s")
 
         ydl_opts = {
             "outtmpl": output_template,
-            "format": "bestvideo+bestaudio/best",  # best quality with audio. [web:5][web:12]
+            "format": "bestvideo+bestaudio/best",
             "merge_output_format": "mp4",
         }
 
@@ -30,11 +31,6 @@ def index():
             filename = f"{temp_id}.{ext}"
             filepath = os.path.join(DOWNLOAD_DIR, filename)
 
-        # return send_file(filepath, as_attachment=True)
-        return send_file(filepath, as_attachment=True, download_name=os.path.basename(filepath))
+        return send_file(filepath, as_attachment=True, download_name=filename)
 
-    return render_template("index.html")
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
+    return render_template("index.html")  # templates/ still works []
